@@ -26,7 +26,9 @@ jobs:
       - name: Locate Android SDK
         run: |
           echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
-          echo "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          SDKMANAGER="$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools" -name sdkmanager -type f | head -n 1)"
+          test -n "$SDKMANAGER"
+          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
       - name: Install Android native toolchain
         run: |
           yes | sdkmanager --licenses >/dev/null || true
