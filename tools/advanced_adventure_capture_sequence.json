@@ -1,0 +1,82 @@
+[
+  {
+    "label": "idle",
+    "buttons": [],
+    "frames": 10
+  },
+  {
+    "label": "A_press",
+    "buttons": [
+      "A"
+    ],
+    "frames": 1
+  },
+  {
+    "label": "A_hold",
+    "buttons": [
+      "A"
+    ],
+    "frames": 12
+  },
+  {
+    "label": "A_release",
+    "buttons": [],
+    "frames": 6
+  },
+  {
+    "label": "B_press",
+    "buttons": [
+      "B"
+    ],
+    "frames": 1
+  },
+  {
+    "label": "B_hold",
+    "buttons": [
+      "B"
+    ],
+    "frames": 12
+  },
+  {
+    "label": "B_release",
+    "buttons": [],
+    "frames": 8
+  },
+  {
+    "label": "up_B",
+    "buttons": [
+      "Up",
+      "B"
+    ],
+    "frames": 10
+  },
+  {
+    "label": "release",
+    "buttons": [],
+    "frames": 8
+  },
+  {
+    "label": "R_hold",
+    "buttons": [
+      "R"
+    ],
+    "frames": 45
+  },
+  {
+    "label": "R_release",
+    "buttons": [],
+    "frames": 8
+  },
+  {
+    "label": "L_press",
+    "buttons": [
+      "L"
+    ],
+    "frames": 12
+  },
+  {
+    "label": "release_all",
+    "buttons": [],
+    "frames": 8
+  }
+]
