@@ -14,11 +14,11 @@ android {
 
     defaultConfig {
         signingConfig signingConfigs.release
-        applicationId = 'com.sky.SkyEmu'
+        applicationId = 'com.kasetheace.emucap'
         minSdkVersion 24
         targetSdkVersion 33
-        versionCode 32
-        versionName "v3.2"
+        versionCode 33
+        versionName "v3.3-capture"
         setProperty("archivesBaseName", applicationId + "-v" + versionCode)
         externalNativeBuild {
             cmake {
