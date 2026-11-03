@@ -21,7 +21,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      # GitHub's Ubuntu runner already has Android SDK command-line tools.
+      # setup-android@v3 currently requests the removed legacy 'tools' package.
+      - name: Locate Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          echo "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
       - name: Install Android native toolchain
         run: |
           yes | sdkmanager --licenses >/dev/null || true
