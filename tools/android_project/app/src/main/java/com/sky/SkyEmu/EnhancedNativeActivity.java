@@ -343,7 +343,6 @@ public class EnhancedNativeActivity extends NativeActivity {
         emucapAnalyzeButton.setTextSize(12);
         emucapAnalyzeButton.setAllCaps(false);
         emucapAnalyzeButton.setFocusable(false);
-        emucapAnalyzeButton.setVisibility(View.GONE);
         controls.addView(emucapAnalyzeButton);
 
         FrameLayout.LayoutParams position = new FrameLayout.LayoutParams(
@@ -359,7 +358,6 @@ public class EnhancedNativeActivity extends NativeActivity {
                     emucapRecording = true;
                     emucapRecordButton.setText("■ Save trace");
                     emucapShareButton.setVisibility(View.GONE);
-                    emucapAnalyzeButton.setVisibility(View.GONE);
                     Toast.makeText(this, "Recording GBA activity: play the move, then save",
                             Toast.LENGTH_SHORT).show();
                 } else {
@@ -398,9 +396,9 @@ public class EnhancedNativeActivity extends NativeActivity {
         });
 
         emucapAnalyzeButton.setOnClickListener(v -> {
-            if (emucapLastTrace == null || !emucapLastTrace.isFile()) return;
             Intent analysis = new Intent(this, TraceViewerActivity.class);
-            analysis.putExtra("trace_path", emucapLastTrace.getAbsolutePath());
+            if (emucapLastTrace != null && emucapLastTrace.isFile())
+                analysis.putExtra("trace_path", emucapLastTrace.getAbsolutePath());
             startActivity(analysis);
         });
 
