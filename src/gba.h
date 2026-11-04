@@ -3808,7 +3808,8 @@ void gba_tick(sb_emu_state_t* emu, gba_t* gba,gba_scratch_t *scratch){
 #ifdef SE_PLATFORM_ANDROID
       if(!gba->cpu.phased_op_id && !gba->cpu.wait_for_interrupt) {
         const bool thumb = (gba->cpu.registers[CPSR] & (1u << 5)) != 0;
-        const uint32_t pc = gba->cpu.registers[PC] - (thumb ? 4u : 8u);
+        /* SkyEmu stores the currently executing address in PC before its\n           instruction handler increments it; no architectural PC bias here. */
+        const uint32_t pc = gba->cpu.registers[PC];
         emucap_trace_on_instruction(pc, gba->cpu.prefetch_opcode[0], thumb);
       }
 #endif
