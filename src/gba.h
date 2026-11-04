@@ -5,6 +5,9 @@
 #include <string.h>
 #include <math.h>
 #include "arm7.h"
+#ifdef SE_PLATFORM_ANDROID
+#include "emucap_trace.h"
+#endif
 #include "gba_bios.h"
 #include <time.h>
 //Should be power of 2 for perf, 8192 samples gives ~85ms maximal latency for 48kHz
@@ -3777,6 +3780,10 @@ void gba_tick(sb_emu_state_t* emu, gba_t* gba,gba_scratch_t *scratch){
   }
 
   gba_tick_keypad(&emu->joy,gba);
+#ifdef SE_PLATFORM_ANDROID
+  /* Track the real on-screen/gamepad input as it reaches the GBA register. */
+  emucap_trace_on_keys(gba_io_read16(gba, GBA_KEYINPUT));
+#endif
   gba->frame_in_progress=true;
   float solar_value = emu->joy.solar_sensor;
   if(!(solar_value <1.00))solar_value=1.00;
@@ -3798,6 +3805,13 @@ void gba_tick(sb_emu_state_t* emu, gba_t* gba,gba_scratch_t *scratch){
           if(int_if)arm7_process_interrupts(&gba->cpu);
         }
       }
+#ifdef SE_PLATFORM_ANDROID
+      if(!gba->cpu.phased_op_id && !gba->cpu.wait_for_interrupt) {
+        const bool thumb = (gba->cpu.registers[CPSR] & (1u << 5)) != 0;
+        const uint32_t pc = gba->cpu.registers[PC] - (thumb ? 4u : 8u);
+        emucap_trace_on_instruction(pc, gba->cpu.prefetch_opcode[0], thumb);
+      }
+#endif
       arm7_exec_instruction(&gba->cpu);
       gba->last_cpu_tick=ticks = gba->mem.requests+gba->cpu.i_cycles; 
     }
@@ -3828,6 +3842,9 @@ void gba_tick(sb_emu_state_t* emu, gba_t* gba,gba_scratch_t *scratch){
       gba_tick_ppu(gba,emu->render_frame);
     }
   } 
+#ifdef SE_PLATFORM_ANDROID
+  emucap_trace_on_frame(gba->mem.wram0, gba->mem.wram1);
+#endif
   emu->joy.rumble = SB_BFE(gba->cart.gpio_data,3,1); 
   //LCD turns off in stop mode
   if(gba->stop_mode)memset(scratch->framebuffer,0,sizeof(scratch->framebuffer));
