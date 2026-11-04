@@ -23,6 +23,7 @@
           android:name="android.support.FILE_PROVIDER_PATHS"
           android:resource="@xml/provider_paths"/>
     </provider>
+    <activity android:name="com.sky.SkyEmu.TraceViewerActivity" android:exported="false" android:label="EmuCap Trace Lab" />
     <activity
       android:name="com.sky.SkyEmu.MainActivity"
       android:exported="true">
