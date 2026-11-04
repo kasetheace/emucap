@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EmuCap Trace Lab</title>
+<style>
+:root{color-scheme:dark;--bg:#0a1020;--panel:#141d32;--edge:#2c3b58;--text:#eff4ff;--muted:#aebcd4;--accent:#67c6ff;--good:#83e7bc}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px system-ui,-apple-system,sans-serif}
+header{padding:22px max(16px,calc((100vw - 1060px)/2));background:linear-gradient(120deg,#152442,#101829);border-bottom:1px solid var(--edge)}
+h1{font-size:1.65rem;margin:0 0 6px}h2{font-size:1.05rem;margin:0 0 12px}.sub,.muted,.hint{color:var(--muted)}
+main{max-width:1100px;margin:auto;padding:20px 16px 40px;display:grid;gap:16px}
+.panel{background:var(--panel);border:1px solid var(--edge);border-radius:14px;padding:16px;min-width:0}
+.loaders{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+label{display:block;font-weight:650;margin-bottom:7px}input[type=file],input[type=search],select{width:100%;padding:10px;border:1px solid var(--edge);border-radius:9px;color:var(--text);background:#0b1426}
+input[type=file]{padding:7px}input::file-selector-button,button{background:#233f67;color:var(--text);padding:8px 10px;border-radius:8px;border:1px solid #476b97;cursor:pointer}
+button:hover{background:#335984}.hint{font-size:.85rem;line-height:1.5;margin-top:7px}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+.metric{padding:12px;border-radius:10px;background:#0d172a}.metric strong{display:block;font-size:1.2rem;color:var(--accent)}.metric span{font-size:.82rem;color:var(--muted)}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}.toolbar input{flex:1;min-width:140px}.toolbar select{width:auto;max-width:100%}
+.scroller{overflow:auto;max-height:450px;border:1px solid var(--edge);border-radius:9px}
+table{border-collapse:collapse;width:100%;min-width:630px;font-size:.87rem;font-variant-numeric:tabular-nums}
+th,td{padding:8px 11px;text-align:left;border-bottom:1px solid #273450;white-space:nowrap}th{background:#1b2842;position:sticky;top:0;color:#c1d3ec}
+tr:nth-child(even){background:#172239}code{color:var(--good)}.empty{padding:22px;color:var(--muted)}.status{font-size:.92rem;color:var(--good);min-height:22px}
+a{color:var(--accent)}.section-description{font-size:.88rem;color:var(--muted);margin-bottom:12px}
+</style>
+</head>
+<body>
+<header><h1>EmuCap / Trace Lab</h1><div class="sub">Compare GBA action traces with an idle baseline. All processing stays on this device.</div></header>
+<main>
+<section class="panel">
+<div class="loaders">
+<div><label for="actionFile">Action recording</label><input id="actionFile" type="file" accept=".json,application/json"><div class="hint" id="actionName">Load a trace captured while performing an attack, jump, or movement.</div></div>
+<div><label for="baselineFile">Idle recording (optional)</label><input id="baselineFile" type="file" accept=".json,application/json"><div class="hint" id="baselineName">Record the same scene without input to filter out ordinary engine activity.</div></div>
+</div><p class="status" id="status" role="status"></p>
+</section>
+<section class="panel"><h2>Recording summary</h2><div class="metrics" id="metrics"><div class="muted">Load a trace to see activity.</div></div></section>
+<section class="panel">
+<h2>Candidate ROM instructions</h2>
+<div class="section-description">These are executed instruction addresses, not recovered function names. With an idle baseline, scores represent extra hits per frame during the action. Check high-ranking addresses in Ghidra and validate with repeated recordings.</div>
+<div class="toolbar"><input id="pcFilter" type="search" placeholder="Filter addresses (e.g. 0802)"><button id="copyPcs" type="button">Copy top addresses</button><span class="muted" id="pcCount"></span></div>
+<div class="scroller"><table><thead><tr><th>ROM address</th><th>Mode</th><th>Action hits</th><th>Idle hits</th><th>Extra/frame</th><th>First frame</th></tr></thead><tbody id="pcBody"></tbody></table></div>
+</section>
+<section class="panel">
+<h2>RAM changes</h2><div class="section-description">Frame-to-frame samples, not exact write watchpoints. The recorder limits samples per frame; addresses here are candidates for state variables.</div>
+<div class="scroller"><table><thead><tr><th>RAM address</th><th>Action changes</th><th>Idle changes</th><th>Extra/frame</th><th>Example</th></tr></thead><tbody id="ramBody"></tbody></table></div>
+</section>
+<section class="panel">
+<h2>Button timeline and instruction sequence</h2><div class="toolbar"><select id="eventSelect" aria-label="Choose button event"><option value="-1">Load an action trace</option></select></div>
+<div id="eventDescription" class="section-description"></div>
+<div class="scroller"><table><thead><tr><th>Frame</th><th>PC</th><th>Opcode</th><th>Mode</th></tr></thead><tbody id="sampleBody"></tbody></table></div>
+</section>
+<div class="hint">Limitations: ROM coverage excludes code running in RAM; samples cover only the first instructions after detected button changes; trace buffers can fill up. Capture idle and action runs from comparable game states for more meaningful differences.</div>
+</main>
+<script>
+"use strict";
+let actionTrace=null, idleTrace=null, rankedPcs=[];
+const el=id=>document.getElementById(id);
+const number=x=>Number(x||0);
+const fmt=x=>number(x).toLocaleString("en-US");
+const keyMask=mask=>{
+ const names=["A","B","Select","Start","Right","Left","Up","Down","R","L"];
+ return names.filter((_,i)=>(Number(mask)&(1<<i))===0).join("+")||"Idle";
+};
+function checkTrace(value){
+ if(!value || !Array.isArray(value.pc_coverage) || !Array.isArray(value.button_changes) || !Array.isArray(value.ram_changes))
+   throw new Error("This does not appear to be an EmuCap GBA trace JSON file.");
+ return value;
+}
+function setStatus(message,error=false){el("status").textContent=message;el("status").style.color=error?"#ffafa9":"var(--good)";}
+async function loadPicked(file,target){
+ if(!file)return;
+ try{
+  if(file.size>40*1024*1024)throw new Error("File exceeds 40 MB size limit.");
+  const t=checkTrace(JSON.parse(await file.text()));
+  if(target==="action"){actionTrace=t;el("actionName").textContent=file.name;}
+  else{idleTrace=t;el("baselineName").textContent=file.name;}
+  render();setStatus("Loaded "+file.name);
+ }catch(e){setStatus(String(e.message||e),true);}
+}
+el("actionFile").addEventListener("change",e=>loadPicked(e.target.files[0],"action"));
+el("baselineFile").addEventListener("change",e=>loadPicked(e.target.files[0],"baseline"));
+window.loadTraceFromAndroid=function(source){
+ try{actionTrace=checkTrace(JSON.parse(source));el("actionName").textContent="Current APK recording";render();setStatus("Loaded recording saved by the app.");}
+ catch(e){setStatus("Could not open APK recording: "+e.message,true);}
+};
+function addCells(body,cells){
+ const tr=document.createElement("tr");
+ cells.forEach((value,i)=>{const td=document.createElement("td");td.textContent=String(value);if(i===0)td.style.color="var(--good)";tr.appendChild(td);});
+ body.appendChild(tr);
+}
+function countChanges(trace){
+ const counts=new Map();
+ for(const c of (trace?.ram_changes||[])){
+  const address=String(c.address||"");
+  if(!/^0x[0-9a-f]{8}$/i.test(address))continue;
+  let entry=counts.get(address);
+  if(!entry){entry={count:0,example:""};counts.set(address,entry);}
+  entry.count++;
+  if(!entry.example)entry.example=String(c.before)+" → "+String(c.after);
+ }
+ return counts;
+}
+function render(){
+ if(!actionTrace)return;
+ const a=actionTrace,b=idleTrace;
+ const metrics=[
+  ["Frames",fmt(a.frames)],["Instructions observed",fmt(a.instructions_observed)],
+  ["ROM PCs",fmt((a.pc_coverage||[]).length)],["Button events",fmt((a.button_changes||[]).length)],
+  ["RAM samples",fmt((a.ram_changes||[]).length)],["Baseline",b?fmt(b.frames)+" frames":"Not loaded"]];
+ el("metrics").replaceChildren();
+ metrics.forEach(([name,value])=>{const box=document.createElement("div");box.className="metric";const strong=document.createElement("strong");strong.textContent=value;const span=document.createElement("span");span.textContent=name;box.append(strong,span);el("metrics").appendChild(box);});
+ const problems=number(a.pc_overflow)+number(a.ram_change_overflow)+number(a.button_overflow);
+ if(problems)setStatus("Warning: buffers omitted "+fmt(problems)+" observations. Keep recordings shorter.",true);
+ const basePc=new Map((b?.pc_coverage||[]).map(x=>[String(x.pc)+"/"+!!x.thumb,x]));
+ rankedPcs=(a.pc_coverage||[]).filter(x=>/^0x[0-9a-f]{8}$/i.test(String(x.pc)))
+   .map(x=>{
+    const old=basePc.get(String(x.pc)+"/"+!!x.thumb);
+    const ah=number(x.hits), bh=number(old?.hits);
+    const extra=ah/Math.max(1,number(a.frames))-(b?bh/Math.max(1,number(b.frames)):0);
+    return {pc:x.pc,thumb:!!x.thumb,hits:ah,baseline:bh,extra,first:x.first_frame};
+   }).sort((x,y)=>(b?(y.extra-x.extra):(y.hits-x.hits)) || y.hits-x.hits || x.pc.localeCompare(y.pc));
+ renderPcs();
+ const ca=countChanges(a),cb=countChanges(b),ranked=[];
+ ca.forEach((value,address)=>{
+  const bv=cb.get(address), bh=number(bv?.count);
+  const extra=value.count/Math.max(1,number(a.frames))-(b?bh/Math.max(1,number(b.frames)):0);
+  ranked.push({address,changes:value.count,bh,extra,example:value.example});
+ });
+ ranked.sort((x,y)=>y.extra-x.extra || y.changes-x.changes);
+ el("ramBody").replaceChildren();
+ for(const x of ranked.slice(0,150))addCells(el("ramBody"),[x.address,x.changes,x.bh,x.extra.toFixed(3),x.example]);
+ if(!ranked.length)addCells(el("ramBody"),["No sampled changes","—","—","—","—"]);
+ const sel=el("eventSelect");sel.replaceChildren();
+ (a.button_changes||[]).forEach((e,index)=>{
+  const option=document.createElement("option");
+  option.value=String(number(e.event)||index+1);
+  option.textContent="Frame "+fmt(e.frame)+" · "+keyMask(e.keyinput);
+  sel.appendChild(option);
+ });
+ if(!sel.options.length){const op=document.createElement("option");op.textContent="No button events";sel.appendChild(op);}
+ sel.selectedIndex=0;renderSamples();
+}
+function renderPcs(){
+ el("pcBody").replaceChildren();
+ const filter=el("pcFilter").value.trim().toLowerCase();
+ const filtered=rankedPcs.filter(x=>x.pc.toLowerCase().includes(filter));
+ for(const x of filtered.slice(0,350))
+  addCells(el("pcBody"),[x.pc,x.thumb?"Thumb":"ARM",fmt(x.hits),fmt(x.baseline),x.extra.toFixed(3),fmt(x.first)]);
+ el("pcCount").textContent=fmt(filtered.length)+" matching · first 350 shown";
+}
+el("pcFilter").addEventListener("input",renderPcs);
+el("copyPcs").addEventListener("click",async()=>{
+ const list=rankedPcs.filter(x=>!idleTrace||x.extra>0).slice(0,100).map(x=>x.pc).join("\n");
+ if(!list){setStatus("No addresses loaded.",true);return;}
+ try{await navigator.clipboard.writeText(list);setStatus("Copied top "+Math.min(100,rankedPcs.length)+" addresses.");}
+ catch(e){const box=document.createElement("textarea");box.value=list;document.body.appendChild(box);box.select();document.execCommand("copy");box.remove();setStatus("Copied candidate addresses.");}
+});
+function renderSamples(){
+ const event=Number(el("eventSelect").value);
+ const data=(actionTrace?.instruction_samples||[]).filter(x=>number(x.button_event)===event);
+ el("sampleBody").replaceChildren();
+ for(const x of data.slice(0,150))addCells(el("sampleBody"),[fmt(x.frame),x.pc,x.opcode,x.thumb?"Thumb":"ARM"]);
+ el("eventDescription").textContent="Sampled "+fmt(data.length)+" instructions following this button transition; first 150 shown. Some recordings stop sampling when buffers reach capacity.";
+ if(!data.length)addCells(el("sampleBody"),["No samples","—","—","—"]);
+}
+el("eventSelect").addEventListener("change",renderSamples);
+</script></body></html>
