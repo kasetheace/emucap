@@ -17,8 +17,8 @@ android {
         applicationId = 'com.kasetheace.emucap'
         minSdkVersion 24
         targetSdkVersion 33
-        versionCode 34
-        versionName "v3.4-gba-trace"
+        versionCode 35
+        versionName "v3.5-trace-lab"
         setProperty("archivesBaseName", applicationId + "-v" + versionCode)
         externalNativeBuild {
             cmake {
