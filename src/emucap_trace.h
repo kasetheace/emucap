@@ -7,7 +7,8 @@
 #if defined(SE_PLATFORM_ANDROID)
 void emucap_trace_on_keys(uint16_t active_low_keyinput);
 void emucap_trace_on_instruction(uint32_t address, uint32_t opcode, uint8_t thumb);
-void emucap_trace_on_frame(const uint8_t *ewram, const uint8_t *iwram);
+void emucap_trace_on_frame(const uint8_t *rom, uint32_t rom_size,
+                           const uint8_t *ewram, const uint8_t *iwram);
 #endif
 
 #endif /* EMUCAP_TRACE_H */
