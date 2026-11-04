@@ -60,6 +60,7 @@ public class EnhancedNativeActivity extends NativeActivity {
     CustomTabsIntent authIntent;
     private Button emucapRecordButton;
     private Button emucapShareButton;
+    private Button emucapAnalyzeButton;
     private boolean emucapRecording;
     private File emucapLastTrace;
 
@@ -337,6 +338,13 @@ public class EnhancedNativeActivity extends NativeActivity {
         emucapShareButton.setFocusable(false);
         emucapShareButton.setVisibility(View.GONE);
         controls.addView(emucapShareButton);
+        emucapAnalyzeButton = new Button(this);
+        emucapAnalyzeButton.setText("Analyze");
+        emucapAnalyzeButton.setTextSize(12);
+        emucapAnalyzeButton.setAllCaps(false);
+        emucapAnalyzeButton.setFocusable(false);
+        emucapAnalyzeButton.setVisibility(View.GONE);
+        controls.addView(emucapAnalyzeButton);
 
         FrameLayout.LayoutParams position = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -351,6 +359,7 @@ public class EnhancedNativeActivity extends NativeActivity {
                     emucapRecording = true;
                     emucapRecordButton.setText("■ Save trace");
                     emucapShareButton.setVisibility(View.GONE);
+                    emucapAnalyzeButton.setVisibility(View.GONE);
                     Toast.makeText(this, "Recording GBA activity: play the move, then save",
                             Toast.LENGTH_SHORT).show();
                 } else {
@@ -378,6 +387,7 @@ public class EnhancedNativeActivity extends NativeActivity {
                     if (success) {
                         emucapLastTrace = output;
                         emucapShareButton.setVisibility(View.VISIBLE);
+                        emucapAnalyzeButton.setVisibility(View.VISIBLE);
                         Toast.makeText(this, "Trace saved; tap Share to export the JSON",
                                 Toast.LENGTH_LONG).show();
                     } else {
@@ -385,6 +395,13 @@ public class EnhancedNativeActivity extends NativeActivity {
                     }
                 });
             }, "EmuCap-Trace-Writer").start();
+        });
+
+        emucapAnalyzeButton.setOnClickListener(v -> {
+            if (emucapLastTrace == null || !emucapLastTrace.isFile()) return;
+            Intent analysis = new Intent(this, TraceViewerActivity.class);
+            analysis.putExtra("trace_path", emucapLastTrace.getAbsolutePath());
+            startActivity(analysis);
         });
 
         emucapShareButton.setOnClickListener(v -> {
