@@ -39,6 +39,20 @@ jobs:
           sdkmanager "platforms;android-33" "build-tools;33.0.2" "ndk;22.1.7171670" "cmake;3.18.1"
       - name: Verify capture helper syntax
         run: python3 -m py_compile tools/advanced_adventure_capture.py
+      - name: Check native trace instrumentation and offline viewer
+        run: |
+          cc -std=c11 -fsyntax-only -DSE_PLATFORM_ANDROID \
+            -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
+            src/emucap_trace.c
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          source = Path('tools/android_project/app/src/main/assets/emucap_trace_viewer.html').read_text()
+          match = re.search(r'<script>(.*?)</script>', source, re.S)
+          assert match, 'Missing embedded viewer JavaScript'
+          Path('/tmp/emucap-trace-viewer.js').write_text(match.group(1))
+          PY
+          node --check /tmp/emucap-trace-viewer.js
       - name: Assemble Android release APK
         working-directory: tools/android_project
         run: |
