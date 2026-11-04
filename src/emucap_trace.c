@@ -237,7 +237,7 @@ Java_com_sky_SkyEmu_EnhancedNativeActivity_emucapStopTrace(JNIEnv *env, jobject 
 
     fprintf(fp, "{\n  \"schema\": \"emucap.gba.trace.v1\",\n");
     fprintf(fp, "  \"rom_included\": false,\n  \"frame_limit\": %u,\n", TRACE_FRAME_CAP);
-    fprintf(fp, "  \\"rom_fingerprint_fnv1a64\\": \\"0x%016llx\\",\\n  \\"rom_bytes\\": %u,\\n",
+    fprintf(fp, "  \"rom_fingerprint_fnv1a64\": \"0x%016llx\",\n  \"rom_bytes\": %u,\n",
             (unsigned long long)rom_fingerprint, rom_bytes);
     fprintf(fp, "  \"frames\": %u,\n  \"instructions_observed\": %llu,\n",
             frame_count, (unsigned long long)instructions_seen);
