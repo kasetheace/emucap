@@ -75,7 +75,7 @@ def main():
             get(args.url, "step", {"frames": frames})
             after = memory_snapshot(args.url)
             image = get(args.url, "screen")
-            if not image.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+            if not image.startswith(b"\x89PNG\r\n\x1a\n"):
                 raise ValueError("SkyEmu did not return PNG screenshot")
             name = f"{index:04d}.png"
             (args.out / name).write_bytes(image)
