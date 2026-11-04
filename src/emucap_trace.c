@@ -64,6 +64,9 @@ static uint16_t current_button_event;
 static uint32_t remaining_sample;
 static uint32_t frame_count, pc_count, sample_count, change_count, button_count;
 static uint64_t instructions_seen;
+static uint64_t rom_fingerprint;
+static uint32_t rom_bytes;
+static bool rom_hashed;
 static uint32_t pc_overflow, change_overflow, button_overflow;
 
 /* A stop on the UI thread must not access the buffers during an emulator write. */
@@ -171,8 +174,21 @@ static void trace_diff_ram(const uint8_t *curr, uint8_t *prev,
     }
 }
 
-void emucap_trace_on_frame(const uint8_t *ewram, const uint8_t *iwram) {
+void emucap_trace_on_frame(const uint8_t *rom, uint32_t rom_size,
+                           const uint8_t *ewram, const uint8_t *iwram) {
     if (!trace_enter()) return;
+    /* ROM identification is computed once per trace and never copies ROM data.
+       FNV-1a is a comparison fingerprint, not a security digest. */
+    if (!rom_hashed && rom && rom_size > 0 && rom_size <= 32u * 1024u * 1024u) {
+        uint64_t hash = UINT64_C(14695981039346656037);
+        for (uint32_t i = 0; i < rom_size; ++i) {
+            hash ^= rom[i];
+            hash *= UINT64_C(1099511628211);
+        }
+        rom_fingerprint = hash;
+        rom_bytes = rom_size;
+        rom_hashed = true;
+    }
     if (!have_ram_baseline) {
         memcpy(previous_ewram, ewram, sizeof(previous_ewram));
         memcpy(previous_iwram, iwram, sizeof(previous_iwram));
@@ -196,6 +212,9 @@ Java_com_sky_SkyEmu_EnhancedNativeActivity_emucapStartTrace(JNIEnv *env, jobject
     frame_count = pc_count = sample_count = change_count = button_count = 0;
     pc_overflow = change_overflow = button_overflow = 0;
     instructions_seen = 0;
+    rom_fingerprint = 0;
+    rom_bytes = 0;
+    rom_hashed = false;
     current_button_event = 0;
     remaining_sample = 0;
     last_keys = 0x03ffu;
@@ -218,6 +237,8 @@ Java_com_sky_SkyEmu_EnhancedNativeActivity_emucapStopTrace(JNIEnv *env, jobject 
 
     fprintf(fp, "{\n  \"schema\": \"emucap.gba.trace.v1\",\n");
     fprintf(fp, "  \"rom_included\": false,\n  \"frame_limit\": %u,\n", TRACE_FRAME_CAP);
+    fprintf(fp, "  \\"rom_fingerprint_fnv1a64\\": \\"0x%016llx\\",\\n  \\"rom_bytes\\": %u,\\n",
+            (unsigned long long)rom_fingerprint, rom_bytes);
     fprintf(fp, "  \"frames\": %u,\n  \"instructions_observed\": %llu,\n",
             frame_count, (unsigned long long)instructions_seen);
     fprintf(fp, "  \"pc_overflow\": %u,\n  \"ram_change_overflow\": %u,\n  \"button_overflow\": %u,\n",
