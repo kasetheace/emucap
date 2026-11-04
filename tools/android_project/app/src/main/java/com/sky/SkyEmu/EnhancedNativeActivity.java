@@ -10,6 +10,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Rect;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -27,6 +28,11 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 
 import android.app.NativeActivity;
+import android.view.Gravity;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.Toast;
+import androidx.core.content.FileProvider;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 
@@ -52,6 +58,10 @@ public class EnhancedNativeActivity extends NativeActivity {
     private Vector<Integer> keyboardEvents;
     private boolean first_event;
     CustomTabsIntent authIntent;
+    private Button emucapRecordButton;
+    private Button emucapShareButton;
+    private boolean emucapRecording;
+    private File emucapLastTrace;
 
     static {
         System.loadLibrary("SkyEmu");
@@ -296,7 +306,104 @@ public class EnhancedNativeActivity extends NativeActivity {
                         }
                     });
         }
+        emucapAddOverlay();
     }
+    /* Optional in-game tracing overlay. It does not affect normal SkyEmu input. */
+    private native boolean emucapStartTrace();
+    private native boolean emucapStopTrace(String absolutePath);
+
+    private int emucapDp(float value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private void emucapAddOverlay() {
+        FrameLayout root = (FrameLayout) mRootView;
+        LinearLayout controls = new LinearLayout(this);
+        controls.setOrientation(LinearLayout.HORIZONTAL);
+        controls.setBackgroundColor(Color.argb(185, 15, 18, 25));
+        controls.setPadding(emucapDp(3), 0, emucapDp(3), 0);
+
+        emucapRecordButton = new Button(this);
+        emucapRecordButton.setText("● Trace");
+        emucapRecordButton.setAllCaps(false);
+        emucapRecordButton.setTextSize(12);
+        emucapRecordButton.setFocusable(false);
+        controls.addView(emucapRecordButton);
+
+        emucapShareButton = new Button(this);
+        emucapShareButton.setText("Share");
+        emucapShareButton.setTextSize(12);
+        emucapShareButton.setAllCaps(false);
+        emucapShareButton.setFocusable(false);
+        emucapShareButton.setVisibility(View.GONE);
+        controls.addView(emucapShareButton);
+
+        FrameLayout.LayoutParams position = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP | Gravity.RIGHT);
+        position.topMargin = emucapDp(6);
+        position.rightMargin = emucapDp(6);
+        root.addView(controls, position);
+
+        emucapRecordButton.setOnClickListener(v -> {
+            if (!emucapRecording) {
+                if (emucapStartTrace()) {
+                    emucapRecording = true;
+                    emucapRecordButton.setText("■ Save trace");
+                    emucapShareButton.setVisibility(View.GONE);
+                    Toast.makeText(this, "Recording GBA activity: play the move, then save",
+                            Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, "Could not start trace", Toast.LENGTH_SHORT).show();
+                }
+                return;
+            }
+
+            File rootDir = getExternalFilesDir(null);
+            if (rootDir == null) rootDir = getFilesDir();
+            File traceDir = new File(rootDir, "emucap-traces");
+            if (!traceDir.exists() && !traceDir.mkdirs()) {
+                Toast.makeText(this, "Could not create trace folder", Toast.LENGTH_LONG).show();
+                return;
+            }
+            final File output = new File(traceDir,
+                    "gba-trace-" + System.currentTimeMillis() + ".json");
+            emucapRecordButton.setEnabled(false);
+            new Thread(() -> {
+                final boolean success = emucapStopTrace(output.getAbsolutePath());
+                runOnUiThread(() -> {
+                    emucapRecording = false;
+                    emucapRecordButton.setEnabled(true);
+                    emucapRecordButton.setText("● Trace");
+                    if (success) {
+                        emucapLastTrace = output;
+                        emucapShareButton.setVisibility(View.VISIBLE);
+                        Toast.makeText(this, "Trace saved; tap Share to export the JSON",
+                                Toast.LENGTH_LONG).show();
+                    } else {
+                        Toast.makeText(this, "Could not save trace", Toast.LENGTH_LONG).show();
+                    }
+                });
+            }, "EmuCap-Trace-Writer").start();
+        });
+
+        emucapShareButton.setOnClickListener(v -> {
+            if (emucapLastTrace == null || !emucapLastTrace.isFile()) return;
+            try {
+                Uri uri = FileProvider.getUriForFile(this,
+                        getPackageName() + ".provider", emucapLastTrace);
+                Intent share = new Intent(Intent.ACTION_SEND);
+                share.setType("application/json");
+                share.putExtra(Intent.EXTRA_STREAM, uri);
+                share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                startActivity(Intent.createChooser(share, "Share GBA action trace"));
+            } catch (Exception error) {
+                Log.e(TAG, "Trace sharing failed", error);
+                Toast.makeText(this, "Could not share trace", Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
     public void openFile(){
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.setType("*/*");
