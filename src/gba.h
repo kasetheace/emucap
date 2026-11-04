@@ -3844,7 +3844,8 @@ void gba_tick(sb_emu_state_t* emu, gba_t* gba,gba_scratch_t *scratch){
     }
   } 
 #ifdef SE_PLATFORM_ANDROID
-  emucap_trace_on_frame(gba->mem.wram0, gba->mem.wram1);
+  emucap_trace_on_frame(gba->mem.cart_rom, gba->cart.rom_size,
+                        gba->mem.wram0, gba->mem.wram1);
 #endif
   emu->joy.rumble = SB_BFE(gba->cart.gpio_data,3,1); 
   //LCD turns off in stop mode
