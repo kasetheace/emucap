@@ -110,11 +110,17 @@ function render(){
  const metrics=[
   ["Frames",fmt(a.frames)],["Instructions observed",fmt(a.instructions_observed)],
   ["ROM PCs",fmt((a.pc_coverage||[]).length)],["Button events",fmt((a.button_changes||[]).length)],
-  ["RAM samples",fmt((a.ram_changes||[]).length)],["Baseline",b?fmt(b.frames)+" frames":"Not loaded"]];
+  ["RAM samples",fmt((a.ram_changes||[]).length)],["Baseline",b?fmt(b.frames)+" frames":"Not loaded"],
+  ["ROM ID",a.rom_fingerprint_fnv1a64||"Unknown"]];
  el("metrics").replaceChildren();
  metrics.forEach(([name,value])=>{const box=document.createElement("div");box.className="metric";const strong=document.createElement("strong");strong.textContent=value;const span=document.createElement("span");span.textContent=name;box.append(strong,span);el("metrics").appendChild(box);});
  const problems=number(a.pc_overflow)+number(a.ram_change_overflow)+number(a.button_overflow);
  if(problems)setStatus("Warning: buffers omitted "+fmt(problems)+" observations. Keep recordings shorter.",true);
+ if(b && a.rom_fingerprint_fnv1a64 && b.rom_fingerprint_fnv1a64 &&
+    a.rom_fingerprint_fnv1a64!=="0x0000000000000000" &&
+    b.rom_fingerprint_fnv1a64!=="0x0000000000000000" &&
+    a.rom_fingerprint_fnv1a64!==b.rom_fingerprint_fnv1a64)
+   setStatus("Warning: ROM fingerprints differ. These recordings may be from different games or revisions; address comparison is unreliable.",true);
  const basePc=new Map((b?.pc_coverage||[]).map(x=>[String(x.pc)+"/"+!!x.thumb,x]));
  rankedPcs=(a.pc_coverage||[]).filter(x=>/^0x[0-9a-f]{8}$/i.test(String(x.pc)))
    .map(x=>{
