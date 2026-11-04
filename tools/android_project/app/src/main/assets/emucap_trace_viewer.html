@@ -83,6 +83,10 @@ window.loadTraceFromAndroid=function(source){
  try{actionTrace=checkTrace(JSON.parse(source));el("actionName").textContent="Current APK recording";render();setStatus("Loaded recording saved by the app.");}
  catch(e){setStatus("Could not open APK recording: "+e.message,true);}
 };
+window.loadBaselineFromAndroid=function(source){
+ try{idleTrace=checkTrace(JSON.parse(source));el("baselineName").textContent="Saved APK baseline";render();setStatus("Loaded saved idle baseline.");}
+ catch(e){setStatus("Could not open saved baseline: "+e.message,true);}
+};
 function addCells(body,cells){
  const tr=document.createElement("tr");
  cells.forEach((value,i)=>{const td=document.createElement("td");td.textContent=String(value);if(i===0)td.style.color="var(--good)";tr.appendChild(td);});
